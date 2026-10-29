@@ -1,0 +1,7 @@
+{
+    "files.associations": { "*.blade.php": "blade" },
+    "emmet.includeLanguages": { "blade": "html" },
+    "files.exclude": { "vendor": false, "storage/framework": true },
+    "search.exclude": { "vendor": true, "storage": true },
+    "editor.tabSize": 4
+}

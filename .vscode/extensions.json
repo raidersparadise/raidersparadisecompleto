@@ -1,0 +1,9 @@
+{
+    "recommendations": [
+        "bmewburn.vscode-intelephense-client",
+        "onecentlab.laravel-blade",
+        "amiralizadeh9480.laravel-extra-intellisense",
+        "qwtel.sqlite-viewer",
+        "editorconfig.editorconfig"
+    ]
+}

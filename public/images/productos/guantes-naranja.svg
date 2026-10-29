@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="guantes naranja">
+<defs>
+<radialGradient id="bg" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e9e7f3"/></radialGradient>
+<linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f2662f"/><stop offset=".55" stop-color="#E84615"/><stop offset="1" stop-color="#b8340c"/></linearGradient>
+<linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5d6491"/><stop offset=".5" stop-color="#1b1f3b"/><stop offset="1" stop-color="#0c0e1f"/></linearGradient>
+<linearGradient id="irid" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E84615"/><stop offset=".5" stop-color="#8f3fb5"/><stop offset="1" stop-color="#363088"/></linearGradient>
+</defs>
+<rect width="400" height="400" fill="url(#bg)"/>
+<circle cx="200" cy="190" r="150" fill="#E84615" opacity=".06"/>
+<ellipse cx="200" cy="350" rx="120" ry="12" fill="#1E2247" opacity=".12"/>
+<path d="M130 330V210c0-14-22-40-22-62 0-14 18-18 26-6l18 30V96c0-12 20-12 20 0v80V80c0-13 22-13 22 0v96V88c0-13 22-13 22 0v90-70c0-12 20-12 20 0v130c0 30-8 52-14 92z" fill="url(#body)"/>
+<rect x="150" y="160" width="100" height="26" rx="12" fill="#1E2247"/>
+<rect x="160" y="166" width="20" height="14" rx="5" fill="#fff" opacity=".35"/><rect x="190" y="166" width="20" height="14" rx="5" fill="#fff" opacity=".35"/><rect x="220" y="166" width="20" height="14" rx="5" fill="#fff" opacity=".35"/>
+<path d="M130 280h120" stroke="#0c0e1f" stroke-opacity=".35" stroke-width="16"/>
+<path d="M160 102v40M196 92v44M232 116v30" stroke="#fff" stroke-opacity=".3" stroke-width="5" stroke-linecap="round"/>
+</svg>

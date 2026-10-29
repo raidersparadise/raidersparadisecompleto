@@ -1,0 +1,8 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        { "label": "Raiders: iniciar servidor", "type": "shell", "command": "php artisan serve", "problemMatcher": [], "group": { "kind": "build", "isDefault": true } },
+        { "label": "Raiders: reiniciar base de datos con datos de prueba", "type": "shell", "command": "php artisan db:wipe; php artisan migrate --seed", "problemMatcher": [] },
+        { "label": "Raiders: ejecutar pruebas", "type": "shell", "command": "php artisan test", "problemMatcher": [], "group": "test" }
+    ]
+}

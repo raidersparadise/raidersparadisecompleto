@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="casco naranja">
+<defs>
+<radialGradient id="bg" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e9e7f3"/></radialGradient>
+<linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f2662f"/><stop offset=".55" stop-color="#E84615"/><stop offset="1" stop-color="#b8340c"/></linearGradient>
+<linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5d6491"/><stop offset=".5" stop-color="#1b1f3b"/><stop offset="1" stop-color="#0c0e1f"/></linearGradient>
+<linearGradient id="irid" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E84615"/><stop offset=".5" stop-color="#8f3fb5"/><stop offset="1" stop-color="#363088"/></linearGradient>
+</defs>
+<rect width="400" height="400" fill="url(#bg)"/>
+<circle cx="200" cy="190" r="150" fill="#E84615" opacity=".06"/>
+<ellipse cx="200" cy="350" rx="120" ry="12" fill="#1E2247" opacity=".12"/>
+<path d="M88 236c-6-78 50-150 132-150 70 0 112 52 112 116 0 22-4 44-14 62l-28 34H140c-30 0-50-26-52-62z" fill="url(#body)"/>
+<path d="M150 150c30-30 92-36 140-10 20 12 32 34 34 60l-120 6c-26 2-46-14-54-56z" fill="url(#glass)"/>
+<path d="M176 146c26-14 64-16 92-4" stroke="#fff" stroke-opacity=".45" stroke-width="7" fill="none" stroke-linecap="round"/>
+<path d="M120 252c40 8 96 8 170-4" stroke="#1E2247" stroke-width="10" fill="none" stroke-linecap="round"/>
+<path d="M112 120c20-18 46-30 74-34" stroke="#fff" stroke-opacity=".35" stroke-width="6" fill="none" stroke-linecap="round"/>
+<rect x="250" y="270" width="44" height="10" rx="5" fill="#0c0e1f" opacity=".5"/>
+<rect x="250" y="286" width="34" height="8" rx="4" fill="#0c0e1f" opacity=".4"/>
+<circle cx="150" cy="200" r="9" fill="#0c0e1f" opacity=".5"/>
+</svg>
