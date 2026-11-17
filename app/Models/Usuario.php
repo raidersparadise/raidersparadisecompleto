@@ -190,4 +190,16 @@ class Usuario extends Authenticatable
     {
         return $this->tieneRol(Rol::ADMIN, Rol::VENDEDOR);
     }
+
+    /**
+     * Administradores activos (destinatarios de las alertas de stock).
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, static>
+     */
+    public static function administradores()
+    {
+        return static::where('activo', true)
+            ->whereHas('rol', fn ($r) => $r->where('nombre_rol', Rol::ADMIN))
+            ->get();
+    }
 }

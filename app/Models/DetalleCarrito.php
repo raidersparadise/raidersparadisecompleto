@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $id_detalle_carrito
  * @property int $id_carrito
  * @property int $id_producto
+ * @property string|null $talla Talla elegida (S, M, L, XL o "Única").
  * @property int $cantidad
  * @property string $precio_unitario
  * @property string $subtotal
@@ -48,7 +49,7 @@ class DetalleCarrito extends Model
      *
      * @var list<string>
      */
-    protected $fillable = ['id_carrito', 'id_producto', 'cantidad', 'precio_unitario', 'subtotal'];
+    protected $fillable = ['id_carrito', 'id_producto', 'cantidad', 'precio_unitario', 'subtotal', 'talla'];
 
     /**
      * Carrito al que pertenece la línea.

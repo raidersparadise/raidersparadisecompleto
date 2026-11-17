@@ -23,7 +23,7 @@
             @if (!empty($filtros['orden']))<input type="hidden" name="orden" value="{{ $filtros['orden'] }}">@endif
             <div class="grupo">
                 <label for="q" class="etiqueta">Buscar</label>
-                <input id="q" class="input" type="search" name="q" value="{{ $filtros['q'] ?? '' }}" placeholder="Nombre o marca" style="margin-top:6px">
+                <input id="q" class="input" type="search" name="q" value="{{ $filtros['q'] ?? '' }}" placeholder="Nombre, marca o etiqueta" style="margin-top:6px">
             </div>
             <div class="grupo">
                 <span class="etiqueta">Categoría</span>
@@ -65,7 +65,7 @@
                 @if ($activos->isNotEmpty())
                     <div class="chips" style="margin-top:8px">
                         @foreach ($activos as $k => $v)
-                            @php($txt = match($k) { 'categoria' => $categorias->firstWhere('id_categoria', $v)?->nombre_categoria, 'marca' => $marcas->firstWhere('id_marca', $v)?->nombre_marca, 'min' => 'Desde '.\App\Support\Formato::cop($v), 'max' => 'Hasta '.\App\Support\Formato::cop($v), default => '“'.$v.'”' })
+                            @php($txt = match($k) { 'categoria' => $categorias->firstWhere('id_categoria', $v)?->nombre_categoria, 'marca' => $marcas->firstWhere('id_marca', $v)?->nombre_marca, 'min' => 'Desde '.\App\Support\Formato::cop($v), 'max' => 'Hasta '.\App\Support\Formato::cop($v), 'etiqueta' => '#'.$v, default => '“'.$v.'”' })
                             <a class="chip" href="{{ route('catalogo', request()->except($k, 'page')) }}" aria-label="Quitar filtro {{ $txt }}">{{ $txt }} <span>&times;</span></a>
                         @endforeach
                     </div>

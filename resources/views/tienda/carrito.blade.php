@@ -22,21 +22,25 @@
         <div class="layout-compra">
             <div class="caja">
                 @foreach ($carrito->detalles as $d)
-                    @php($p = $d->producto)
+                    @php
+                        $p = $d->producto;
+                        $stockLinea = $d->talla !== null && $p->tallas->isNotEmpty() ? $p->stockTalla($d->talla) : $p->stock;
+                    @endphp
                     <div class="linea-carrito">
                         <img src="{{ $p->imagen_url }}" alt="">
                         <div>
                             <span class="small muted">{{ $p->marca->nombre_marca }}</span>
                             <h3><a href="{{ route('producto', $p) }}" style="color:inherit;text-decoration:none">{{ $p->nombre_producto }}</a></h3>
+                            @if ($d->talla && $d->talla !== \App\Support\Tallas::UNICA)<span class="talla-badge">Talla {{ $d->talla }}</span>@endif
                             <span class="small muted">@cop($p->precio_producto) c/u</span>
-                            @if ($d->cantidad > $p->stock)
-                                <div class="error">Solo quedan {{ $p->stock }} unidades. Ajusta la cantidad.</div>
+                            @if ($d->cantidad > $stockLinea)
+                                <div class="error">Solo quedan {{ $stockLinea }} unidades{{ $d->talla && $d->talla !== \App\Support\Tallas::UNICA ? ' en talla '.$d->talla : '' }}. Ajusta la cantidad.</div>
                             @endif
                             <div class="controles">
                                 <form class="inline-form" method="POST" action="{{ route('carrito.actualizar', $d) }}">
                                     @csrf @method('PATCH')
                                     <label class="sr-only" for="cant-{{ $d->id_detalle_carrito }}">Cantidad</label>
-                                    <input id="cant-{{ $d->id_detalle_carrito }}" class="input" type="number" name="cantidad" min="1" max="{{ max(1, min(20, $p->stock)) }}" value="{{ $d->cantidad }}">
+                                    <input id="cant-{{ $d->id_detalle_carrito }}" class="input" type="number" name="cantidad" min="1" max="{{ max(1, min(20, $stockLinea)) }}" value="{{ $d->cantidad }}">
                                     <button class="btn btn-fantasma btn-sm" type="submit">Actualizar</button>
                                 </form>
                                 <form method="POST" action="{{ route('carrito.eliminar', $d) }}">

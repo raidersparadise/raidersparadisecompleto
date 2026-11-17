@@ -16,7 +16,10 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use App\Support\Tallas;
 use Illuminate\Database\Eloquent\Model;
+use App\Support\AlertaStock;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Producto del catálogo.
@@ -39,6 +42,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property-read int $stock
  * @property-read bool $disponible
  * @property-read string $imagen_url
+ * @property-read array<int, string> $galeria
  */
 class Producto extends Model
 {
@@ -178,5 +182,104 @@ class Producto extends Model
         }
 
         return asset($img);
+    }
+
+    /**
+     * Existencias por talla (S, M, L, XL o "Única"), en orden.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function tallas()
+    {
+        return $this->hasMany(ProductoTalla::class, 'id_producto', 'id_producto')->orderBy('orden');
+    }
+
+    /**
+     * Fotos adicionales de la galería (sin los cuadros 360°), en orden.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function imagenes()
+    {
+        return $this->hasMany(ProductoImagen::class, 'id_producto', 'id_producto')->where('tipo', 'galeria')->orderBy('orden');
+    }
+
+    /**
+     * Cuadros de la vista 360° en orden de giro (vacío si el producto no tiene 360°).
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function vistas360()
+    {
+        return $this->hasMany(ProductoImagen::class, 'id_producto', 'id_producto')->where('tipo', '360')->orderBy('orden');
+    }
+
+    /**
+     * Indica si el producto se vende por tallas S–XL (todo menos accesorios).
+     *
+     * @return bool
+     */
+    public function usaTallas(): bool
+    {
+        return Tallas::categoriaUsaTallas($this->categoria?->nombre_categoria);
+    }
+
+    /**
+     * Unidades disponibles en una talla.
+     *
+     * @param  string|null  $talla
+     * @return int
+     */
+    public function stockTalla(?string $talla): int
+    {
+        return (int) ($this->tallas->firstWhere('talla', $talla)?->cantidad_disponible ?? 0);
+    }
+
+    /**
+     * Etiquetas del producto (palabras clave para el buscador).
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\Etiqueta, $this>
+     */
+    public function etiquetas()
+    {
+        return $this->belongsToMany(Etiqueta::class, 'producto_etiqueta', 'id_producto', 'id_etiqueta');
+    }
+
+    /**
+     * Recalcula el inventario total como la suma de las tallas.
+     *
+     * @return void
+     */
+    public function sincronizarStock(): void
+    {
+        $inventario = Inventario::where('id_producto', $this->id_producto)->first();
+        $nivelAntes = $inventario?->nivel;
+
+        $total = (int) ProductoTalla::where('id_producto', $this->id_producto)->sum('cantidad_disponible');
+        Inventario::where('id_producto', $this->id_producto)->update(['cantidad_disponible' => $total]);
+
+        // Alerta inmediata solo cuando el producto pasa de "ok" a "bajo" o "agotado"
+        if ($inventario && AlertaStock::cruzoMinimo($nivelAntes, $inventario->refresh())) {
+            // Se envía cuando se confirma la transacción (o de inmediato si no hay una abierta)
+            DB::afterCommit(fn () => AlertaStock::enviar(collect([$inventario])));
+        }
+
+        $this->unsetRelation('tallas');
+        $this->unsetRelation('inventario');
+    }
+
+    /**
+     * Accesor $producto->galeria: URLs de todas las fotos (la principal primero, sin repetidas).
+     *
+     * @return array<int, string>
+     */
+    public function getGaleriaAttribute(): array
+    {
+        $urls = [$this->imagen_url];
+        foreach ($this->imagenes as $img) {
+            $urls[] = $img->url;
+        }
+
+        return array_values(array_unique($urls));
     }
 }

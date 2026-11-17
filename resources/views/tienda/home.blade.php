@@ -14,97 +14,31 @@
 @section('contenido')
 
 
-{{-- HERO PRINCIPAL RAIDERS PARADISE --}}
-<section class="hero hero-banner">
-    <div class="hero-banner-contenido">
+{{-- HERO PRINCIPAL: texto y botones en HTML (nítidos en cualquier pantalla) + foto del casco --}}
+@php
+    $idCascos = optional($categorias->firstWhere('nombre_categoria', 'Cascos'))->id_categoria;
+@endphp
+<section class="hero hero-v2">
+    <div class="hero-franjas" aria-hidden="true"><span></span><span></span><span></span></div>
 
-        <img
-            src="{{ asset('images/hero-raiders.png') }}"
-            alt="Raiders Paradise - Accesorios premium para motociclistas"
-            class="hero-banner-imagen"
-            fetchpriority="high"
-        >
+    <figure class="hero-foto">
+        <img src="{{ asset('images/hero-casco.webp') }}"
+             alt="Casco integral Shoei negro con detalles naranja"
+             width="1101" height="1200" fetchpriority="high" decoding="async">
+        <figcaption class="hero-sello">
+            <x-icono n="escudo" />
+            <span><strong>Certificación ECE 22.06</strong>Todos nuestros cascos cumplen la norma vigente.</span>
+        </figcaption>
+    </figure>
 
-        {{-- Botón Ver catálogo --}}
-        <a
-            href="{{ route('catalogo') }}"
-            class="hero-banner-enlace hero-banner-catalogo"
-            aria-label="Ver catálogo">
-        </a>
-
-        {{-- Botón Elegir mi casco --}}
-        <a
-            href="{{ route('catalogo', [
-                'categoria' => $categorias->firstWhere(
-                    'nombre_categoria',
-                    'Cascos'
-                )?->id_categoria
-            ]) }}"
-            class="hero-banner-enlace hero-banner-cascos"
-            aria-label="Elegir mi casco">
-        </a>
-
-    </div>
-</section>
-
-<style>
-    /* HERO PRINCIPAL */
-    .hero.hero-banner {
-        padding: 0;
-        background: #080f29;
-        overflow: hidden;
-    }
-
-    .hero-banner-contenido {
-        position: relative;
-        width: 100%;
-        max-width: 1774px;
-        margin: 0 auto;
-        line-height: 0;
-    }
-
-    .hero-banner-imagen {
-        display: block;
-        width: 100%;
-        height: auto;
-    }
-
-    /* Áreas interactivas de los botones */
-    .hero-banner-enlace {
-        position: absolute;
-        display: block;
-        top: 65.5%;
-        height: 9.5%;
-        z-index: 5;
-        background: transparent;
-        border-radius: 18px;
-    }
-
-    .hero-banner-catalogo {
-        left: 4.4%;
-        width: 17.5%;
-    }
-
-    .hero-banner-cascos {
-        left: 23.5%;
-        width: 19.5%;
-    }
-
-    .hero-banner-enlace:focus-visible {
-        outline: 3px solid white;
-        outline-offset: 3px;
-    }
-</style>
-
-
-        <div class="hero-visual" aria-hidden="true">
-            <div class="hero-placa"></div>
-
-            <img src="{{ asset('images/casco-hero.png') }}" alt="">
-
-            <div class="hero-dato">
-                <strong>Certificación ECE 22.06</strong>
-                <span>Todos nuestros cascos cumplen la norma vigente.</span>
+    <div class="contenedor">
+        <div class="hero-texto">
+            <span class="hero-eyebrow">Accesorios premium para motociclistas</span>
+            <h1>Equípate para la ruta <span>que mereces</span></h1>
+            <p class="lead">Cascos, guantes, chaquetas, impermeables y botas de Shoei, AGV, Alpinestars, Dainese y más. Originales, con garantía y asesoría de motociclistas.</p>
+            <div class="botones">
+                <a class="btn btn-brasa" href="{{ route('catalogo') }}"><x-icono n="carrito" /> Ver catálogo</a>
+                <a class="btn btn-linea" href="{{ route('catalogo', ['categoria' => $idCascos]) }}"><x-icono n="escudo" /> Elegir mi casco</a>
             </div>
         </div>
     </div>
@@ -161,13 +95,14 @@
         </div>
 
         @php
+            // Fotos reales de productos del catálogo (public/images/categorias)
             $iconos = [
-                'Accesorios'   => 'accesorios.png',
-                'Botas'        => 'botas.png',
-                'Cascos'       => 'cascos.png',
-                'Chaquetas'    => 'chaquetas.png',
-                'Guantes'      => 'guantes.png',
-                'Impermeables' => 'impermeables.png',
+                'Accesorios'   => 'categorias/accesorios.webp',
+                'Botas'        => 'categorias/botas.webp',
+                'Cascos'       => 'categorias/cascos.webp',
+                'Chaquetas'    => 'categorias/chaquetas.webp',
+                'Guantes'      => 'categorias/guantes.webp',
+                'Impermeables' => 'categorias/impermeables.webp',
             ];
         @endphp
 
@@ -186,7 +121,7 @@
 
                     @if ($imagenCategoria)
                         <img
-                            src="{{ asset('images/productos/' . $imagenCategoria) }}"
+                            src="{{ asset('images/' . $imagenCategoria) }}"
                             alt="{{ $c->nombre_categoria }}"
                             width="76"
                             height="76"

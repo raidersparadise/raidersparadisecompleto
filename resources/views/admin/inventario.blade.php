@@ -30,7 +30,11 @@
             <tr>
                 <td><div class="prod"><img src="{{ $i->producto->imagen_url }}" alt=""><span><strong>{{ $i->producto->nombre_producto }}</strong><br><span class="small muted">{{ $i->producto->sku }}</span></span></div></td>
                 <td>{{ $i->producto->categoria->nombre_categoria }}</td>
-                <td class="num"><strong>{{ $i->cantidad_disponible }}</strong></td>
+                <td class="num"><strong>{{ $i->cantidad_disponible }}</strong>
+                    @if ($i->producto->tallas->isNotEmpty() && $i->producto->tallas->first()->talla !== \App\Support\Tallas::UNICA)
+                        <div class="tallas-mini">@foreach ($i->producto->tallas as $t)<span @class(['cero' => $t->cantidad_disponible === 0])>{{ $t->talla }} {{ $t->cantidad_disponible }}</span>@endforeach</div>
+                    @endif
+                </td>
                 <td class="num">{{ $i->cantidad_minima }}</td>
                 <td><span class="badge badge-{{ $i->nivel === 'ok' ? 'normal' : $i->nivel }}">{{ ['ok' => 'Normal', 'bajo' => 'Stock bajo', 'agotado' => 'Agotado'][$i->nivel] }}</span></td>
                 <td>
@@ -41,6 +45,13 @@
                             <option value="salida">Salida −</option>
                             <option value="ajuste">Ajustar a</option>
                         </select>
+                        @if ($i->producto->tallas->count() > 1)
+                            <select class="select" name="talla" aria-label="Talla" style="width:74px">
+                                @foreach ($i->producto->tallas as $t)<option value="{{ $t->talla }}">{{ $t->talla }}</option>@endforeach
+                            </select>
+                        @elseif ($i->producto->tallas->isNotEmpty())
+                            <input type="hidden" name="talla" value="{{ $i->producto->tallas->first()->talla }}">
+                        @endif
                         <input class="input" type="number" name="cantidad" min="0" value="1" style="width:72px" aria-label="Cantidad">
                         <input class="input" type="number" name="cantidad_minima" min="0" value="{{ $i->cantidad_minima }}" style="width:64px" aria-label="Stock mínimo" title="Stock mínimo">
                         <button class="btn btn-sm" type="submit">Aplicar</button>

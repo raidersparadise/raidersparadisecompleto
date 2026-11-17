@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $id_detalle_pedido
  * @property int $id_pedido
  * @property int $id_producto
+ * @property string|null $talla Talla elegida (S, M, L, XL o "Única").
  * @property int $cantidad
  * @property string $precio_unitario
  * @property string $sub_total
@@ -48,7 +49,7 @@ class DetallePedido extends Model
      *
      * @var list<string>
      */
-    protected $fillable = ['id_pedido', 'id_producto', 'cantidad', 'precio_unitario', 'sub_total'];
+    protected $fillable = ['id_pedido', 'id_producto', 'cantidad', 'precio_unitario', 'sub_total', 'talla'];
 
     /**
      * Pedido al que pertenece la línea.

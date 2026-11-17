@@ -102,9 +102,10 @@ class TiendaTest extends TestCase
         $cliente = $this->usuario('juan.perez@correo.co');
         $producto = Producto::where('sku', 'GUA-ALP-006')->first();
         $stockInicial = $producto->inventario->cantidad_disponible;
+        $stockTallaM = $producto->stockTalla('M');
 
-        $this->actingAs($cliente)->post("/carrito/agregar/{$producto->id_producto}", ['cantidad' => 2])->assertSessionHas('ok');
-        $this->actingAs($cliente)->get('/carrito')->assertOk()->assertSee($producto->nombre_producto);
+        $this->actingAs($cliente)->post("/carrito/agregar/{$producto->id_producto}", ['cantidad' => 2, 'talla' => 'M'])->assertSessionHas('ok');
+        $this->actingAs($cliente)->get('/carrito')->assertOk()->assertSee($producto->nombre_producto)->assertSee('Talla M');
 
         $res = $this->actingAs($cliente)->post('/checkout', [
             'direccion_envio' => 'Calle 1 # 2-3', 'ciudad_envio' => 'Bogotá', 'telefono' => '3000000000', 'metodo_pago' => 'nequi',
@@ -112,10 +113,13 @@ class TiendaTest extends TestCase
 
         $pedido = Pedido::latest('id_pedido')->first();
         $res->assertRedirect(route('cuenta.pedido', $pedido));
-        $this->assertEquals(1780000, (float) $pedido->total);
+        $esperado = 2 * (float) $producto->precio_producto;
+        $this->assertEquals($esperado, (float) $pedido->total);
         $this->assertSame('pagada', $pedido->factura->estado_factura);
-        $this->assertEqualsWithDelta(1780000, $pedido->factura->subtotal + $pedido->factura->impuesto, 0.01);
+        $this->assertEqualsWithDelta($esperado, $pedido->factura->subtotal + $pedido->factura->impuesto, 0.01);
         $this->assertSame($stockInicial - 2, $producto->inventario->fresh()->cantidad_disponible);
+        $this->assertSame($stockTallaM - 2, $producto->fresh()->stockTalla('M'));
+        $this->assertSame('M', $pedido->detalles->first()->talla);
         $this->assertSame(0, $cliente->cliente->carrito->detalles()->count());
 
         $this->actingAs($cliente)->get("/factura/{$pedido->id_pedido}")->assertOk()->assertSee($pedido->factura->numero_factura);
@@ -124,8 +128,9 @@ class TiendaTest extends TestCase
     public function test_no_se_puede_comprar_mas_del_stock(): void
     {
         $producto = Producto::where('sku', 'BOT-DAI-019')->first(); // stock 1
+        $talla = $producto->tallas->firstWhere('cantidad_disponible', '>', 0)->talla;
         $this->actingAs($this->usuario('juan.perez@correo.co'))
-            ->post("/carrito/agregar/{$producto->id_producto}", ['cantidad' => 5])
+            ->post("/carrito/agregar/{$producto->id_producto}", ['cantidad' => 5, 'talla' => $talla])
             ->assertSessionHas('error');
     }
 
@@ -157,6 +162,108 @@ class TiendaTest extends TestCase
         $this->assertSame('cancelado', $pedido->fresh()->estado);
         $this->assertSame('anulada', $pedido->factura->fresh()->estado_factura);
         $this->assertGreaterThanOrEqual($antes + $d->cantidad, Inventario::where('id_producto', $d->id_producto)->value('cantidad_disponible'));
+    }
+
+    public function test_productos_con_talla_exigen_elegirla(): void
+    {
+        $producto = Producto::where('sku', 'CAS-LS2-004')->first();
+        $this->assertSame(['S', 'M', 'L', 'XL'], $producto->tallas->pluck('talla')->all());
+        $this->assertSame($producto->stock, $producto->tallas->sum('cantidad_disponible'));
+
+        $this->actingAs($this->usuario('juan.perez@correo.co'))
+            ->post("/carrito/agregar/{$producto->id_producto}", ['cantidad' => 1])
+            ->assertSessionHasErrors('talla');
+        $this->actingAs($this->usuario('juan.perez@correo.co'))
+            ->post("/carrito/agregar/{$producto->id_producto}", ['cantidad' => 1, 'talla' => 'XXL'])
+            ->assertSessionHasErrors('talla');
+    }
+
+    public function test_misma_referencia_en_dos_tallas_son_lineas_distintas(): void
+    {
+        $cliente = $this->usuario('maria.torres@correo.co');
+        $producto = Producto::where('sku', 'CAS-LS2-004')->first(); // 12 unidades: S2 M4 L4 XL2
+        $this->actingAs($cliente)->post("/carrito/agregar/{$producto->id_producto}", ['talla' => 'M'])->assertSessionHas('ok');
+        $this->actingAs($cliente)->post("/carrito/agregar/{$producto->id_producto}", ['talla' => 'L', 'cantidad' => 2])->assertSessionHas('ok');
+        $this->actingAs($cliente)->post("/carrito/agregar/{$producto->id_producto}", ['talla' => 'M'])->assertSessionHas('ok');
+
+        $lineas = $cliente->cliente->carrito->detalles()->orderBy('talla')->get();
+        $this->assertSame(['L' => 2, 'M' => 2], $lineas->pluck('cantidad', 'talla')->all());
+
+        // La talla S solo tiene 2 unidades aunque el total sea mayor
+        $this->actingAs($cliente)->post("/carrito/agregar/{$producto->id_producto}", ['talla' => 'S', 'cantidad' => 3])->assertSessionHas('error');
+    }
+
+    public function test_accesorio_se_agrega_en_talla_unica(): void
+    {
+        $cliente = $this->usuario('santiago.lopez@correo.co');
+        $producto = Producto::where('sku', 'ACC-SEN-021')->first();
+        $this->actingAs($cliente)->post("/carrito/agregar/{$producto->id_producto}")->assertSessionHas('ok');
+        $this->assertSame('Única', $cliente->cliente->carrito->detalles()->first()->talla);
+    }
+
+    public function test_cancelar_pedido_devuelve_la_talla(): void
+    {
+        $cliente = $this->usuario('juan.perez@correo.co');
+        $producto = Producto::where('sku', 'CHA-ALP-011')->first();
+        $antes = $producto->stockTalla('L');
+        $this->actingAs($cliente)->post("/carrito/agregar/{$producto->id_producto}", ['talla' => 'L'])->assertSessionHas('ok');
+        $this->actingAs($cliente)->post('/checkout', ['direccion_envio' => 'Calle 1', 'ciudad_envio' => 'Cali', 'telefono' => '3000000000', 'metodo_pago' => 'pse']);
+        $this->assertSame($antes - 1, $producto->fresh()->stockTalla('L'));
+
+        $pedido = Pedido::latest('id_pedido')->first();
+        $this->actingAs($this->usuario('ventas@raidersparadise.co'))->put("/admin/pedidos/{$pedido->id_pedido}", ['estado' => 'cancelado']);
+        $this->assertSame($antes, $producto->fresh()->stockTalla('L'));
+        $this->assertSame($producto->fresh()->tallas->sum('cantidad_disponible'), $producto->fresh()->stock);
+    }
+
+    public function test_ficha_muestra_galeria_y_tallas(): void
+    {
+        $producto = Producto::where('sku', 'BOT-DAI-019')->first();
+        $this->assertGreaterThan(1, count($producto->galeria));
+        $this->get("/producto/{$producto->id_producto}")->assertOk()
+            ->assertSee('data-galeria', false)
+            ->assertSee('Guía de tallas')
+            ->assertSee('name="talla" value="XL"', false);
+        $this->get('/catalogo')->assertOk()->assertSee('data-carrusel', false);
+    }
+
+    public function test_productos_nuevos_quedan_ocultos_hasta_tener_foto(): void
+    {
+        $nuevo = Producto::where('sku', 'CAS-SHO-025')->first();
+        $this->assertNotNull($nuevo);
+        $this->assertSame('inactivo', $nuevo->estado_producto);
+        $this->assertSame(['S', 'M', 'L', 'XL'], $nuevo->tallas->pluck('talla')->all());
+        $this->assertSame(35, Producto::count());
+        $this->get('/catalogo')->assertOk()->assertSee('<strong>24</strong> productos', false);
+    }
+
+    public function test_importar_fotos_publica_producto_y_crea_vista_360(): void
+    {
+        $sku = 'CAS-AGV-026';
+        $principal = public_path("images/productos/nuevos/{$sku}.png");
+        $dir360 = public_path("images/productos/360/{$sku}");
+        @mkdir($dir360, 0777, true);
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+        file_put_contents($principal, $png);
+        foreach ([1, 2, 10, 3] as $n) {
+            file_put_contents("{$dir360}/{$n}.png", $png);
+        }
+
+        try {
+            $this->artisan('productos:importar-fotos', ['--sku' => $sku])->assertSuccessful();
+            $p = Producto::where('sku', $sku)->first();
+            $this->assertSame('activo', $p->estado_producto);
+            $this->assertNull($p->comentario_producto);
+            $this->assertSame(["images/productos/360/{$sku}/1.png", "images/productos/360/{$sku}/2.png", "images/productos/360/{$sku}/3.png", "images/productos/360/{$sku}/10.png"], $p->vistas360->pluck('ruta')->all());
+            $this->assertCount(1, $p->galeria); // los cuadros 360° no se mezclan con la galería
+
+            $this->get("/producto/{$p->id_producto}")->assertOk()->assertSee('data-visor-360', false)->assertSee('Arrastra para girar');
+            $this->get('/catalogo?q=K3')->assertOk()->assertSee('sello-360', false);
+        } finally {
+            @unlink($principal);
+            array_map('unlink', glob("{$dir360}/*.png"));
+            @rmdir($dir360);
+        }
     }
 
     public function test_pqr_de_visitante_crea_cliente_y_radicado(): void

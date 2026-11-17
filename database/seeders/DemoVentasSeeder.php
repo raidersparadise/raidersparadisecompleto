@@ -52,7 +52,7 @@ class DemoVentasSeeder extends Seeder
         }
 
         $clientes = Cliente::all();
-        $productos = Producto::all();
+        $productos = Producto::activos()->with('tallas')->get();
         $metodos = ['nequi', 'pse', 'tarjeta', 'tarjeta', 'contraentrega'];
 
         for ($i = 0; $i < 85; $i++) {
@@ -76,7 +76,8 @@ class DemoVentasSeeder extends Seeder
                 $cant = mt_rand(1, 10) > 8 ? 2 : 1;
                 $sub = $cant * (float) $prod->precio_producto;
                 $total += $sub;
-                $pedido->detalles()->create(['id_producto' => $prod->id_producto, 'cantidad' => $cant, 'precio_unitario' => $prod->precio_producto, 'sub_total' => $sub]);
+                $talla = $prod->tallas->isNotEmpty() ? $prod->tallas->random()->talla : null;
+                $pedido->detalles()->create(['id_producto' => $prod->id_producto, 'talla' => $talla, 'cantidad' => $cant, 'precio_unitario' => $prod->precio_producto, 'sub_total' => $sub]);
             }
             $pedido->update(['total' => $total]);
 

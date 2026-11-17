@@ -17,7 +17,9 @@ namespace App\Http\Controllers;
 
 use App\Models\DetalleCarrito;
 use App\Models\Producto;
+use App\Support\Tallas;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Gestiona el carrito persistente del cliente autenticado.
@@ -46,36 +48,48 @@ class CarritoController extends Controller
      */
     public function index(Request $request)
     {
-        $carrito = $this->cliente($request)->carritoActivo()->load('detalles.producto.inventario', 'detalles.producto.marca');
+        $carrito = $this->cliente($request)->carritoActivo()->load('detalles.producto.inventario', 'detalles.producto.marca', 'detalles.producto.tallas');
 
         return view('tienda.carrito', compact('carrito'));
     }
 
     /**
-     * Agrega un producto al carrito o suma unidades si ya estaba.
+     * Agrega un producto al carrito en la talla elegida (o suma unidades si ya estaba en esa talla).
      *
-     * Rechaza productos no disponibles y cantidades mayores al stock.
+     * Los productos con tallas (cascos, guantes, chaquetas, impermeables, botas) exigen elegir
+     * S, M, L o XL; los accesorios se agregan en talla única. El stock se valida por talla.
      *
-     * @param \Illuminate\Http\Request $request Petición HTTP actual.
-     * @param Producto $producto Producto a agregar.
+     * @param  \Illuminate\Http\Request  $request  Campos: cantidad (opcional), talla.
+     * @param  \App\Models\Producto  $producto
      * @return \Illuminate\Http\RedirectResponse
-     * @throws \Illuminate\Validation\ValidationException Si los datos no cumplen las reglas de validación.
      */
     public function agregar(Request $request, Producto $producto)
     {
-        $datos = $request->validate(['cantidad' => ['nullable', 'integer', 'min:1', 'max:20']]);
-        $cantidad = (int) ($datos['cantidad'] ?? 1);
+        $producto->load('tallas', 'categoria', 'inventario');
+        $opciones = $producto->tallas->pluck('talla')->all();
 
         if (! $producto->disponible) {
             return back()->with('error', 'Este producto no está disponible en este momento.');
         }
 
+        $datos = $request->validate([
+            'cantidad' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'talla' => [$producto->usaTallas() && $opciones ? 'required' : 'nullable', 'string', Rule::in($opciones ?: [Tallas::UNICA])],
+        ], ['talla.required' => 'Elige una talla antes de agregar el producto al carrito.'], ['talla' => 'talla']);
+        $cantidad = (int) ($datos['cantidad'] ?? 1);
+        $talla = $datos['talla'] ?? ($opciones ? $opciones[0] : null);
+
+        $stock = $talla !== null && $opciones ? $producto->stockTalla($talla) : $producto->stock;
+        $etiqueta = $talla && $talla !== Tallas::UNICA ? " en talla {$talla}" : '';
+
         $carrito = $this->cliente($request)->carritoActivo();
-        $detalle = $carrito->detalles()->firstOrNew(['id_producto' => $producto->id_producto]);
+        $detalle = $carrito->detalles()->firstOrNew(['id_producto' => $producto->id_producto, 'talla' => $talla]);
         $nueva = ($detalle->exists ? $detalle->cantidad : 0) + $cantidad;
 
-        if ($nueva > $producto->stock) {
-            return back()->with('error', "Solo hay {$producto->stock} unidades disponibles de {$producto->nombre_producto}.");
+        if ($nueva > $stock) {
+            return back()->withInput()->with('error', $stock > 0
+                ? "Solo hay {$stock} unidades disponibles de {$producto->nombre_producto}{$etiqueta}."
+                : "{$producto->nombre_producto} está agotado{$etiqueta}. Prueba con otra talla.");
         }
 
         $detalle->fill([
@@ -84,32 +98,31 @@ class CarritoController extends Controller
             'subtotal' => $nueva * $producto->precio_producto,
         ])->save();
 
-        return back()->with('ok', "Agregaste {$producto->nombre_producto} al carrito.");
+        return back()->with('ok', "Agregaste {$producto->nombre_producto}{$etiqueta} al carrito.");
     }
 
     /**
-     * Cambia la cantidad de una línea del carrito (entre 1 y 20, sin superar el stock).
+     * Cambia la cantidad de una línea del carrito, validando el stock de su talla.
      *
-     * @param \Illuminate\Http\Request $request Petición HTTP actual.
-     * @param DetalleCarrito $detalle Línea a modificar.
+     * @param  \Illuminate\Http\Request  $request  Campo: cantidad.
+     * @param  \App\Models\DetalleCarrito  $detalle
      * @return \Illuminate\Http\RedirectResponse
-     * @throws \Illuminate\Validation\ValidationException Si los datos no cumplen las reglas de validación.
-     * @throws \Symfony\Component\HttpKernel\Exception\HttpException 403 si la línea es de otro cliente.
      */
     public function actualizar(Request $request, DetalleCarrito $detalle)
     {
         $this->autorizar($request, $detalle);
         $datos = $request->validate(['cantidad' => ['required', 'integer', 'min:1', 'max:20']]);
-        $stock = $detalle->producto->stock;
+        $producto = $detalle->producto->load('tallas', 'inventario');
+        $stock = $detalle->talla !== null && $producto->tallas->isNotEmpty() ? $producto->stockTalla($detalle->talla) : $producto->stock;
 
         if ($datos['cantidad'] > $stock) {
-            return back()->with('error', "Solo hay {$stock} unidades disponibles.");
+            return back()->with('error', "Solo hay {$stock} unidades disponibles".($detalle->talla && $detalle->talla !== Tallas::UNICA ? " en talla {$detalle->talla}." : '.'));
         }
 
         $detalle->update([
             'cantidad' => $datos['cantidad'],
-            'precio_unitario' => $detalle->producto->precio_producto,
-            'subtotal' => $datos['cantidad'] * $detalle->producto->precio_producto,
+            'precio_unitario' => $producto->precio_producto,
+            'subtotal' => $datos['cantidad'] * $producto->precio_producto,
         ]);
 
         return back()->with('ok', 'Cantidad actualizada.');

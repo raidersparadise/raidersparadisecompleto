@@ -55,7 +55,7 @@
         <aside class="caja resumen">
             <h3>Tu pedido</h3>
             @foreach ($carrito->detalles as $d)
-                <div class="fila small"><span>{{ $d->cantidad }} × {{ $d->producto->nombre_producto }}</span><span>@cop($d->cantidad * $d->producto->precio_producto)</span></div>
+                <div class="fila small"><span>{{ $d->cantidad }} × {{ $d->producto->nombre_producto }}@if ($d->talla && $d->talla !== \App\Support\Tallas::UNICA) · Talla {{ $d->talla }}@endif</span><span>@cop($d->cantidad * $d->producto->precio_producto)</span></div>
             @endforeach
             @php($total = $carrito->detalles->sum(fn($d) => $d->cantidad * $d->producto->precio_producto))
             <div class="fila muted small" style="margin-top:8px"><span>Subtotal sin IVA</span><span>@cop($total / 1.19)</span></div>

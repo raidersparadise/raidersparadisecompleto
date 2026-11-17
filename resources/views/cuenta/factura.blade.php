@@ -36,7 +36,7 @@
         <thead><tr><th>Referencia</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Valor unitario</th><th class="num">Total</th></tr></thead>
         <tbody>
         @foreach ($pedido->detalles as $d)
-            <tr><td>{{ $d->producto->sku }}</td><td>{{ $d->producto->nombre_producto }}</td><td class="num">{{ $d->cantidad }}</td><td class="num">@cop($d->precio_unitario)</td><td class="num">@cop($d->sub_total)</td></tr>
+            <tr><td>{{ $d->producto->sku }}</td><td>{{ $d->producto->nombre_producto }}@if ($d->talla && $d->talla !== \App\Support\Tallas::UNICA) — Talla {{ $d->talla }}@endif</td><td class="num">{{ $d->cantidad }}</td><td class="num">@cop($d->precio_unitario)</td><td class="num">@cop($d->sub_total)</td></tr>
         @endforeach
         </tbody>
         <tfoot>

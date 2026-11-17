@@ -13,9 +13,14 @@
  * | data-autoenviar                  | Envía el formulario al cambiar un select                   |
  * | data-preview="#img"              | Vista previa de la imagen elegida en un input file         |
  * | data-rango="7|30|90|mes|anio"    | Llena las fechas desde/hasta de un formulario de reportes  |
- * | data-demo / data-pass            | Llena el login con una cuenta de prueba                    |
  * | data-autoimprimir (en <body>)    | Abre el diálogo de impresión (reportes PDF)                |
  * | .alerta-ok[data-auto]            | La alerta de éxito se oculta a los 6 segundos              |
+ * | [data-galeria]                   | Galería: miniaturas, flechas, efecto 3D y zoom con clic    |
+ * | [data-visor-360]='[urls]'        | Visor 360°: arrastrar para girar el producto               |
+ * | [data-carrusel]                  | Carrusel de fotos en la tarjeta del catálogo               |
+ * | input[name=talla][data-stock]    | Selector de talla: actualiza texto, stock y cantidad máx.  |
+ * | data-abrir="#dialogo"            | Abre un <dialog> (guía de tallas)                          |
+ * | select[data-tallas] (admin)      | Muestra stock S–XL o talla única según la categoría        |
  *
  * Los datos de las gráficas los genera App\Services\ReporteService con la forma:
  * {tipo: 'line'|'bar'|'donut', titulo: string, labels: string[], valores: number[], formato: 'money'|'int'}
@@ -256,7 +261,7 @@
     }
 
     /* ---------- Interacciones generales ---------- */
-    // ---- Delegación de clics: menús, +/−, cerrar alertas, cuentas demo y rangos de fecha ----
+    // ---- Delegación de clics: menús, +/−, cerrar alertas y rangos de fecha ----
     document.addEventListener('click', (e) => {
         // Menús desplegables
         const toggle = e.target.closest('[data-toggle]');
@@ -282,14 +287,6 @@
 
         // Cerrar alertas
         if (e.target.matches('.alerta .cerrar')) e.target.closest('.alerta').remove();
-
-        // Rellenar cuentas de prueba en el login
-        const demo = e.target.closest('[data-demo]');
-        if (demo) {
-            document.querySelector('#email').value = demo.dataset.demo;
-            document.querySelector('#password').value = demo.dataset.pass;
-            document.querySelector('#password').focus();
-        }
 
         // Rangos rápidos de fechas en reportes
         const rango = e.target.closest('[data-rango]');
@@ -323,6 +320,177 @@
             if (img) img.src = URL.createObjectURL(e.target.files[0]);
         }
     });
+
+    // ---- Visor 360°: arrastrar (mouse o dedo) cambia el cuadro; giro automático al cargar ----
+    /**
+     * Activa un visor 360° sobre un contenedor con data-visor-360='["url1", "url2", ...]'.
+     * @param {HTMLElement} visor
+     */
+    function iniciarVisor360(visor) {
+        let cuadros = [];
+        try { cuadros = JSON.parse(visor.dataset.visor360 || '[]'); } catch (e) { return; }
+        const img = visor.querySelector('img');
+        if (!img || cuadros.length < 2) return;
+        cuadros.forEach((u) => { const i = new Image(); i.src = u; }); // precarga
+        let actual = 0, x0 = null, base = 0, girando = null;
+        const ir = (n) => { actual = ((n % cuadros.length) + cuadros.length) % cuadros.length; img.src = cuadros[actual]; };
+        const parar = () => { if (girando) { clearInterval(girando); girando = null; } };
+        visor.addEventListener('pointerdown', (e) => {
+            parar(); x0 = e.clientX; base = actual;
+            visor.classList.add('arrastrando'); visor.setPointerCapture(e.pointerId);
+        });
+        visor.addEventListener('pointermove', (e) => {
+            if (x0 === null) return;
+            const paso = Math.max(4, visor.clientWidth / cuadros.length / 1.2);
+            ir(base - Math.round((e.clientX - x0) / paso));
+        });
+        const soltar = () => { x0 = null; visor.classList.remove('arrastrando'); };
+        visor.addEventListener('pointerup', soltar);
+        visor.addEventListener('pointercancel', soltar);
+        visor.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') { parar(); ir(actual - 1); }
+            if (e.key === 'ArrowRight') { parar(); ir(actual + 1); }
+        });
+        visor.tabIndex = 0;
+        // Una vuelta automática para mostrar que el producto gira
+        if (visor.dataset.autogiro !== undefined && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            let vueltas = 0;
+            girando = setInterval(() => { ir(actual + 1); if (++vueltas >= cuadros.length) parar(); }, 90);
+        }
+    }
+    document.querySelectorAll('[data-visor-360]').forEach(iniciarVisor360);
+
+    // ---- Galería de producto (tipo marketplace) ----
+    document.querySelectorAll('[data-galeria]').forEach((galeria) => {
+        const principal = galeria.querySelector('[data-foto-principal]');
+        const marco = galeria.querySelector('.foto-3d');
+        const caja = galeria.querySelector('[data-zoom]');
+        const visor = galeria.querySelector('[data-visor-360]');
+        const boton360 = galeria.querySelector('[data-modo-360]');
+        const botones = [...galeria.querySelectorAll('[data-foto]')];
+        const contador = galeria.querySelector('.galeria-contador');
+        const numero = galeria.querySelector('[data-foto-n]');
+        const pista = galeria.querySelector('.galeria-pista');
+        let actual = 0;
+        const marcar = (activo) => [boton360, ...botones].forEach((b) => {
+            if (!b) return;
+            b.classList.toggle('activa', b === activo);
+            b.setAttribute('aria-selected', b === activo);
+        });
+        const modo360 = () => {
+            if (!visor) return;
+            visor.hidden = false; marco.hidden = true;
+            if (contador) contador.hidden = true;
+            if (pista) pista.textContent = '360°';
+            marcar(boton360);
+        };
+        const mostrar = (i) => {
+            if (!botones.length) return;
+            actual = (i + botones.length) % botones.length;
+            principal.src = botones[actual].dataset.foto;
+            marco.hidden = false;
+            if (visor) visor.hidden = true;
+            if (contador) contador.hidden = false;
+            if (numero) numero.textContent = actual + 1;
+            if (pista) pista.textContent = 'Vista 3D · clic para ampliar';
+            caja.classList.remove('zoom');
+            marcar(botones[actual]);
+        };
+        boton360?.addEventListener('click', modo360);
+        boton360?.addEventListener('mouseenter', modo360);
+        botones.forEach((b, n) => {
+            b.addEventListener('mouseenter', () => mostrar(n));
+            b.addEventListener('click', () => mostrar(n));
+        });
+        galeria.querySelectorAll('[data-mover]').forEach((f) => f.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mostrar(marco.hidden ? 0 : actual + (+f.dataset.mover));
+        }));
+
+        // Efecto 3D: la foto se inclina siguiendo el mouse y se agranda sutilmente.
+        // Un clic activa el zoom de detalle (2x) y otro clic lo quita.
+        if (marco && window.matchMedia('(hover: hover)').matches) {
+            marco.addEventListener('mousemove', (e) => {
+                const r = marco.getBoundingClientRect();
+                const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+                if (caja.classList.contains('zoom')) {
+                    principal.style.transformOrigin = `${px * 100}% ${py * 100}%`;
+                    principal.style.transform = 'scale(2.1)';
+                } else {
+                    principal.style.transformOrigin = 'center';
+                    principal.style.transform = `perspective(900px) rotateY(${(px - 0.5) * 16}deg) rotateX(${(0.5 - py) * 12}deg) scale(1.06)`;
+                }
+            });
+            marco.addEventListener('mouseleave', () => { caja.classList.remove('zoom'); principal.style.transform = ''; });
+            marco.addEventListener('click', (e) => { caja.classList.toggle('zoom'); marco.dispatchEvent(new MouseEvent('mousemove', e)); });
+        }
+        // Deslizar con el dedo en celulares (solo en modo foto)
+        let x0 = null;
+        marco?.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+        marco?.addEventListener('touchend', (e) => {
+            if (x0 === null) return;
+            const dx = e.changedTouches[0].clientX - x0;
+            if (Math.abs(dx) > 40) mostrar(actual + (dx < 0 ? 1 : -1));
+            x0 = null;
+        });
+    });
+
+    // ---- Carrusel de fotos en las tarjetas del catálogo ----
+    document.querySelectorAll('[data-carrusel]').forEach((foto) => {
+        const imgs = [...foto.querySelectorAll('img')];
+        const puntos = [...foto.querySelectorAll('.carrusel-puntos i')];
+        let actual = 0;
+        const mostrar = (i) => {
+            actual = (i + imgs.length) % imgs.length;
+            imgs.forEach((im, n) => im.classList.toggle('activa', n === actual));
+            puntos.forEach((p, n) => p.classList.toggle('activa', n === actual));
+        };
+        foto.querySelectorAll('[data-carrusel-mover]').forEach((b) => b.addEventListener('click', (e) => {
+            e.preventDefault(); // no abrir la ficha al usar las flechas
+            mostrar(actual + (+b.dataset.carruselMover));
+        }));
+        // Al pasar el mouse se muestra la segunda foto (como en los marketplaces)
+        foto.addEventListener('mouseenter', () => { if (actual === 0) mostrar(1); });
+        foto.addEventListener('mouseleave', () => mostrar(0));
+    });
+
+    // ---- Selector de tallas en la ficha del producto ----
+    document.querySelectorAll('[data-form-tallas]').forEach((form) => {
+        const texto = form.querySelector('[data-talla-texto]');
+        const stock = form.querySelector('[data-talla-stock]');
+        const cantidad = form.querySelector('input[name="cantidad"]');
+        form.querySelectorAll('input[name="talla"][data-stock]').forEach((r) => r.addEventListener('change', () => {
+            const n = +r.dataset.stock;
+            if (texto) texto.textContent = r.value;
+            if (stock) stock.textContent = `${n} ${n === 1 ? 'disponible' : 'disponibles'} en talla ${r.value}`;
+            if (cantidad) {
+                cantidad.max = Math.min(n, 20);
+                if (+cantidad.value > n) cantidad.value = Math.max(1, n);
+            }
+        }));
+    });
+
+    // ---- Diálogos (guía de tallas) ----
+    document.querySelectorAll('[data-abrir]').forEach((b) => b.addEventListener('click', () => {
+        document.querySelector(b.dataset.abrir)?.showModal?.();
+    }));
+
+    // ---- Admin: stock por talla según la categoría elegida ----
+    const selCategoria = document.querySelector('select#id_categoria');
+    const gruposTallas = document.querySelectorAll('[data-grupo-tallas]');
+    if (selCategoria && gruposTallas.length) {
+        const aplicar = () => {
+            const opcion = selCategoria.selectedOptions[0];
+            const usa = !opcion || opcion.dataset.tallas !== '0';
+            gruposTallas.forEach((g) => {
+                const visible = (g.dataset.grupoTallas === '1') === usa;
+                g.hidden = !visible;
+                g.querySelectorAll('input').forEach((i) => { i.disabled = !visible; });
+            });
+        };
+        selCategoria.addEventListener('change', aplicar);
+        aplicar();
+    }
 
     // Impresión automática de reportes en PDF
     if (document.body.dataset.autoimprimir !== undefined) {

@@ -1,0 +1,27 @@
+FOTOS PRINCIPALES DE LOS PRODUCTOS NUEVOS
+==========================================
+
+Estos productos ya están creados en la base de datos, pero quedan OCULTOS en la tienda
+hasta que tengan su foto principal. Deja aquí una foto por producto con el SKU como nombre
+(se acepta .webp, .jpg, .png o .avif; mayúsculas o minúsculas):
+
+  CAS-SHO-025.webp   ->  Shoei NXR2 Negro Brillante
+  CAS-AGV-026.webp   ->  AGV K3 Mono Negro Mate
+  GUA-ALP-027.webp   ->  Alpinestars SP-8 v3
+  GUA-DAI-028.webp   ->  Dainese Carbon 4 Short
+  CHA-REV-029.webp   ->  Rev'It Eclipse 2
+  CHA-DAI-030.webp   ->  Dainese Racing 4 Cuero
+  IMP-REV-031.webp   ->  Rev'It Acid 4 H2O Chaqueta
+  BOT-ALP-032.webp   ->  Alpinestars SMX Plus v2
+  BOT-DAI-033.webp   ->  Dainese Nexus 2
+  ACC-SEN-034.webp   ->  Sena 60S Intercomunicador
+  ACC-GIV-035.webp   ->  Givi Trekker Alaska 56L
+
+Luego ejecuta en la carpeta del proyecto:
+
+  php artisan productos:importar-fotos
+
+El comando registra la foto y publica el producto. También puedes hacerlo desde el panel:
+Productos > Editar > Imagen del producto, y cambiar el estado a "Activo".
+
+Fotos ideales: cuadradas (800 x 800 px), fondo blanco, producto centrado.

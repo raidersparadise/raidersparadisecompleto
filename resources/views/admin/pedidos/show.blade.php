@@ -24,7 +24,7 @@
                 <thead><tr><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Subtotal</th></tr></thead>
                 <tbody>
                 @foreach ($pedido->detalles as $d)
-                    <tr><td><div class="prod"><img src="{{ $d->producto->imagen_url }}" alt="">{{ $d->producto->nombre_producto }}</div></td><td class="num">{{ $d->cantidad }}</td><td class="num">@cop($d->precio_unitario)</td><td class="num">@cop($d->sub_total)</td></tr>
+                    <tr><td><div class="prod"><img src="{{ $d->producto->imagen_url }}" alt=""><span>{{ $d->producto->nombre_producto }}@if ($d->talla && $d->talla !== \App\Support\Tallas::UNICA)<br><span class="talla-badge">Talla {{ $d->talla }}</span>@endif</span></div></td><td class="num">{{ $d->cantidad }}</td><td class="num">@cop($d->precio_unitario)</td><td class="num">@cop($d->sub_total)</td></tr>
                 @endforeach
                 </tbody>
                 <tfoot>

@@ -32,7 +32,7 @@ class TiendaController extends Controller
      */
     public function home()
     {
-        $destacados = Producto::activos()->with('marca', 'inventario')->where('destacado', true)->latest()->take(8)->get();
+        $destacados = Producto::activos()->with('marca', 'inventario', 'imagenes', 'tallas', 'categoria')->withCount('vistas360')->where('destacado', true)->latest()->take(8)->get();
         $categorias = Categoria::withCount(['productos' => fn ($q) => $q->activos()])->orderBy('nombre_categoria')->get();
         $marcas = Marca::orderBy('nombre_marca')->get();
 
@@ -42,7 +42,7 @@ class TiendaController extends Controller
     /**
      * Catálogo con búsqueda, filtros y orden; 12 productos por página.
      *
-     * Parámetros de consulta: q (texto), categoria, marca, min, max y
+     * Parámetros de consulta: q (texto: nombre, descripción, marca o etiqueta), etiqueta (slug), categoria, marca, min, max y
      * orden (recientes | precio_asc | precio_desc | nombre).
      *
      * @param \Illuminate\Http\Request $request Petición HTTP actual.
@@ -53,6 +53,7 @@ class TiendaController extends Controller
     {
         $filtros = $request->validate([
             'q' => ['nullable', 'string', 'max:60'],
+            'etiqueta' => ['nullable', 'string', 'max:50'],
             'categoria' => ['nullable', 'integer'],
             'marca' => ['nullable', 'integer'],
             'min' => ['nullable', 'numeric', 'min:0'],
@@ -60,15 +61,19 @@ class TiendaController extends Controller
             'orden' => ['nullable', 'in:recientes,precio_asc,precio_desc,nombre'],
         ]);
 
-        $query = Producto::activos()->with('marca', 'categoria', 'inventario');
+        $query = Producto::activos()->with('marca', 'categoria', 'inventario', 'imagenes', 'tallas')->withCount('vistas360');
 
         if (! empty($filtros['q'])) {
             $q = $filtros['q'];
             $query->where(function ($w) use ($q) {
                 $w->where('nombre_producto', 'like', "%{$q}%")
                     ->orWhere('descripcion_producto', 'like', "%{$q}%")
-                    ->orWhereHas('marca', fn ($m) => $m->where('nombre_marca', 'like', "%{$q}%"));
+                    ->orWhereHas('marca', fn ($m) => $m->where('nombre_marca', 'like', "%{$q}%"))
+                    ->orWhereHas('etiquetas', fn ($e) => $e->where('nombre', 'like', "%{$q}%"));
             });
+        }
+        if (! empty($filtros['etiqueta'])) {
+            $query->whereHas('etiquetas', fn ($e) => $e->where('slug', $filtros['etiqueta']));
         }
         if (! empty($filtros['categoria'])) {
             $query->where('id_categoria', $filtros['categoria']);
@@ -108,9 +113,9 @@ class TiendaController extends Controller
     public function producto(Producto $producto)
     {
         abort_if($producto->estado_producto !== 'activo', 404);
-        $producto->load('marca', 'categoria', 'inventario');
+        $producto->load('marca', 'categoria', 'inventario', 'imagenes', 'tallas', 'vistas360', 'etiquetas');
 
-        $relacionados = Producto::activos()->with('marca', 'inventario')
+        $relacionados = Producto::activos()->with('marca', 'inventario', 'imagenes', 'tallas', 'categoria')->withCount('vistas360')
             ->where('id_categoria', $producto->id_categoria)
             ->where('id_producto', '!=', $producto->id_producto)
             ->inRandomOrder()->take(4)->get();

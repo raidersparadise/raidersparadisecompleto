@@ -85,15 +85,46 @@ class AdminTest extends TestCase
         $this->actingAs($this->admin())->post('/admin/productos', [
             'sku' => 'CAS-TEST-999', 'nombre_producto' => 'Casco de prueba', 'precio_producto' => 500000,
             'id_categoria' => 1, 'id_marca' => 1, 'id_proveedor' => 1, 'estado_producto' => 'activo',
-            'cantidad_disponible' => 7, 'cantidad_minima' => 2,
+            'stock_tallas' => ['S' => 1, 'M' => 2, 'L' => 3, 'XL' => 1], 'cantidad_minima' => 2,
             'imagen' => UploadedFile::fake()->image('casco.jpg', 600, 600),
+            'imagenes' => [UploadedFile::fake()->image('lado.jpg', 600, 600), UploadedFile::fake()->image('atras.jpg', 600, 600)],
         ])->assertRedirect('/admin/productos');
 
         $p = Producto::where('sku', 'CAS-TEST-999')->first();
         $this->assertSame(7, $p->stock);
+        $this->assertSame(['S' => 1, 'M' => 2, 'L' => 3, 'XL' => 1], $p->tallas->pluck('cantidad_disponible', 'talla')->all());
+        $this->assertCount(3, $p->galeria);
+        foreach ($p->imagenes as $img) {
+            @unlink(public_path($img->ruta));
+        }
         $this->assertStringStartsWith('uploads/productos/', $p->imagen_producto);
         $this->assertFileExists(public_path($p->imagen_producto));
         @unlink(public_path($p->imagen_producto));
+    }
+
+    public function test_subir_vista_360_desde_el_panel(): void
+    {
+        $p = Producto::where('sku', 'CAS-SHO-001')->first();
+        $frames = collect(range(1, 12))->map(fn ($n) => UploadedFile::fake()->image(str_pad((string) $n, 2, '0', STR_PAD_LEFT).'.jpg', 400, 400))->shuffle()->all();
+
+        $this->actingAs($this->admin())->put("/admin/productos/{$p->id_producto}", [
+            'sku' => $p->sku, 'nombre_producto' => $p->nombre_producto, 'precio_producto' => (int) $p->precio_producto,
+            'id_categoria' => $p->id_categoria, 'id_marca' => $p->id_marca, 'id_proveedor' => $p->id_proveedor,
+            'estado_producto' => 'activo', 'cantidad_minima' => 2,
+            'stock_tallas' => $p->tallas->pluck('cantidad_disponible', 'talla')->all(),
+            'vistas360' => $frames,
+        ])->assertRedirect('/admin/productos');
+
+        $cuadros = $p->fresh()->vistas360;
+        $this->assertCount(12, $cuadros);
+        $this->assertStringStartsWith('01-', basename($cuadros->first()->ruta)); // se ordenan por nombre
+        $this->assertSame(6, $p->fresh()->stock); // el stock no cambia
+
+        $this->actingAs($this->admin())->get("/admin/productos/{$p->id_producto}/edit")->assertOk()->assertSee('12 cuadros');
+        foreach ($cuadros as $c) {
+            @unlink(public_path($c->ruta));
+        }
+        @rmdir(public_path('uploads/productos/360/cas-sho-001'));
     }
 
     public function test_producto_con_ventas_se_inactiva_en_vez_de_borrarse(): void
@@ -116,10 +147,14 @@ class AdminTest extends TestCase
     public function test_movimiento_de_inventario(): void
     {
         $this->actingAs($this->admin());
-        $inv = Producto::where('sku', 'GUA-REV-008')->first()->inventario; // 0 unidades
-        $this->put("/admin/inventario/{$inv->id_inventario}", ['movimiento' => 'entrada', 'cantidad' => 10, 'cantidad_minima' => 3])->assertSessionHas('ok');
-        $this->assertSame(10, $inv->fresh()->cantidad_disponible);
-        $this->put("/admin/inventario/{$inv->id_inventario}", ['movimiento' => 'salida', 'cantidad' => 50, 'cantidad_minima' => 3])->assertSessionHas('error');
+        $producto = Producto::where('sku', 'GUA-REV-008')->first(); // 0 unidades
+        $inv = $producto->inventario;
+        $this->put("/admin/inventario/{$inv->id_inventario}", ['movimiento' => 'entrada', 'talla' => 'L', 'cantidad' => 10, 'cantidad_minima' => 3])->assertSessionHas('ok');
+        $this->put("/admin/inventario/{$inv->id_inventario}", ['movimiento' => 'entrada', 'talla' => 'S', 'cantidad' => 4, 'cantidad_minima' => 3])->assertSessionHas('ok');
+        $this->assertSame(14, $inv->fresh()->cantidad_disponible);
+        $this->assertSame(10, $producto->fresh()->stockTalla('L'));
+        $this->put("/admin/inventario/{$inv->id_inventario}", ['movimiento' => 'salida', 'talla' => 'S', 'cantidad' => 5, 'cantidad_minima' => 3])->assertSessionHas('error');
+        $this->put("/admin/inventario/{$inv->id_inventario}", ['movimiento' => 'entrada', 'cantidad' => 1, 'cantidad_minima' => 3])->assertSessionHasErrors('talla');
     }
 
     public function test_admin_crea_usuario_y_no_puede_desactivarse_a_si_mismo(): void

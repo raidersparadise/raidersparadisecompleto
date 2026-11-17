@@ -11,14 +11,22 @@
 
 @section('contenido')
 <div class="auth">
+    <div class="auth-tarjeta">
     <div class="auth-lado">
-        <img src="{{ asset('images/logo-blanco.png') }}" alt="">
-        <h2>Únete a los Raiders</h2>
-        <p>Con tu cuenta compras más rápido, sigues tus envíos y guardas tus facturas en un solo lugar.</p>
+        <img class="auth-logo" src="{{ asset('images/logo-blanco.png') }}" alt="Raiders Paradise">
+        <div>
+            <h2>Únete a los <span>Raiders</span></h2>
+            <p>Con tu cuenta compras más rápido, sigues tus envíos y guardas tus facturas en un solo lugar.</p>
+            <ul class="auth-beneficios">
+                <li><x-icono n="camion" /> Sigue tus pedidos en tiempo real</li>
+                <li><x-icono n="doc" /> Descarga tus facturas cuando quieras</li>
+                <li><x-icono n="escudo" /> Productos 100% originales con garantía</li>
+            </ul>
+        </div>
     </div>
     <div class="auth-form">
         <div class="caja">
-            <h1 style="font-size:2rem">Crear cuenta</h1>
+            <h1>Crear cuenta</h1>
             <p class="muted">¿Ya tienes cuenta? <a href="{{ route('login') }}">Ingresa aquí</a>.</p>
             @include('partials.alertas')
             <form method="POST" action="{{ route('registro') }}">
@@ -38,6 +46,7 @@
                 <button class="btn btn-brasa btn-bloque" type="submit">Crear mi cuenta</button>
             </form>
         </div>
+    </div>
     </div>
 </div>
 @endsection

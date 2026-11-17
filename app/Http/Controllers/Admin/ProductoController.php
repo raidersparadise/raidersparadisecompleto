@@ -17,10 +17,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Categoria;
+use App\Models\Etiqueta;
 use App\Models\Inventario;
 use App\Models\Marca;
 use App\Models\Producto;
+use App\Models\ProductoTalla;
 use App\Models\Proveedor;
+use App\Support\ImagenOptimizada;
+use App\Support\Tallas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -78,9 +82,12 @@ class ProductoController extends Controller
             $producto = Producto::create($this->datosProducto($request, $datos));
             Inventario::create([
                 'id_producto' => $producto->id_producto,
-                'cantidad_disponible' => $datos['cantidad_disponible'],
+                'cantidad_disponible' => 0,
                 'cantidad_minima' => $datos['cantidad_minima'],
             ]);
+            $this->guardarTallas($producto, $datos);
+            $this->guardarGaleria($request, $producto);
+            $producto->etiquetas()->sync(Etiqueta::idsDesdeTexto($request->input('etiquetas')));
         });
 
         return redirect()->route('admin.productos.index')->with('ok', 'Producto creado correctamente.');
@@ -94,7 +101,7 @@ class ProductoController extends Controller
      */
     public function edit(Producto $producto)
     {
-        $producto->load('inventario');
+        $producto->load('inventario', 'tallas', 'imagenes', 'vistas360', 'etiquetas');
 
         return view('admin.productos.form', $this->opciones() + compact('producto'));
     }
@@ -115,8 +122,11 @@ class ProductoController extends Controller
             $producto->update($this->datosProducto($request, $datos, $producto));
             Inventario::updateOrCreate(
                 ['id_producto' => $producto->id_producto],
-                ['cantidad_disponible' => $datos['cantidad_disponible'], 'cantidad_minima' => $datos['cantidad_minima']]
+                ['cantidad_minima' => $datos['cantidad_minima']]
             );
+            $this->guardarTallas($producto, $datos);
+            $this->guardarGaleria($request, $producto);
+            $producto->etiquetas()->sync(Etiqueta::idsDesdeTexto($request->input('etiquetas')));
         });
 
         return redirect()->route('admin.productos.index')->with('ok', 'Producto actualizado.');
@@ -143,7 +153,7 @@ class ProductoController extends Controller
     }
 
     /**
-     * Reglas de validación del formulario de producto (SKU único, precio, imagen de hasta 2 MB...).
+     * Reglas de validación del formulario de producto (SKU único, precio, imagen de hasta 8 MB, etiquetas...).
      *
      * @param \Illuminate\Http\Request $request Petición HTTP actual.
      * @param Producto|null $producto Producto en edición, para excluirlo de la validación de SKU único.
@@ -163,12 +173,21 @@ class ProductoController extends Controller
             'estado_producto' => ['required', 'in:activo,inactivo'],
             'destacado' => ['nullable', 'boolean'],
             'comentario_producto' => ['nullable', 'string', 'max:255'],
-            'imagen' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-            'cantidad_disponible' => ['required', 'integer', 'min:0', 'max:100000'],
+            'imagen' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+            'stock_tallas' => ['required', 'array'],
+            'stock_tallas.*' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'imagenes' => ['nullable', 'array', 'max:8'],
+            'imagenes.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+            'etiquetas' => ['nullable', 'string', 'max:255'],
+            'quitar_imagenes' => ['nullable', 'array'],
+            'quitar_imagenes.*' => ['integer'],
+            'vistas360' => ['nullable', 'array', 'max:72'],
+            'vistas360.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
+            'quitar_360' => ['nullable', 'boolean'],
             'cantidad_minima' => ['required', 'integer', 'min:0', 'max:10000'],
         ], [], [
             'nombre_producto' => 'nombre', 'precio_producto' => 'precio', 'id_categoria' => 'categoría',
-            'id_marca' => 'marca', 'id_proveedor' => 'proveedor', 'cantidad_disponible' => 'cantidad disponible',
+            'id_marca' => 'marca', 'id_proveedor' => 'proveedor', 'stock_tallas.*' => 'unidades por talla', 'imagenes.*' => 'foto adicional', 'vistas360.*' => 'cuadro 360°',
             'cantidad_minima' => 'cantidad mínima',
         ]);
     }
@@ -186,23 +205,102 @@ class ProductoController extends Controller
      */
     private function datosProducto(Request $request, array $datos, ?Producto $producto = null): array
     {
-        $campos = collect($datos)->except(['imagen', 'cantidad_disponible', 'cantidad_minima'])->all();
+        $campos = collect($datos)->except(['imagen', 'stock_tallas', 'cantidad_minima', 'imagenes', 'quitar_imagenes', 'vistas360', 'quitar_360', 'etiquetas'])->all();
         $campos['destacado'] = $request->boolean('destacado');
 
         if ($request->hasFile('imagen')) {
-            // Se guarda en public/uploads para que funcione sin "php artisan storage:link"
-            $dir = public_path('uploads/productos');
-            File::ensureDirectoryExists($dir);
-            $nombre = Str::slug($datos['nombre_producto']).'-'.Str::random(6).'.'.$request->file('imagen')->extension();
-            $request->file('imagen')->move($dir, $nombre);
+            // Se comprime (WebP, máx. 1200 px, sin EXIF/GPS) y se guarda en public/uploads
+            // para que funcione sin "php artisan storage:link"
+            $img = ImagenOptimizada::guardar($request->file('imagen'), 'uploads/productos', $datos['nombre_producto']);
 
             if ($producto && str_starts_with((string) $producto->imagen_producto, 'uploads/')) {
                 File::delete(public_path($producto->imagen_producto));
             }
-            $campos['imagen_producto'] = 'uploads/productos/'.$nombre;
+            $campos['imagen_producto'] = $img['ruta'];
         }
 
         return $campos;
+    }
+
+        /**
+     * Guarda las unidades por talla según la categoría (S–XL o talla única)
+     * y deja el inventario total igual a la suma de las tallas.
+     *
+     * @param  \App\Models\Producto  $producto
+     * @param  array<string, mixed>  $datos  Datos validados (incluye stock_tallas).
+     * @return void
+     */
+    private function guardarTallas(Producto $producto, array $datos): void
+    {
+        $categoria = Categoria::find($datos['id_categoria'])?->nombre_categoria;
+        $tallas = Tallas::paraCategoria($categoria);
+        $stock = $datos['stock_tallas'] ?? [];
+
+        // Si cambia de "con tallas" a "talla única" (o al revés) se conserva el total
+        $anterior = (int) ProductoTalla::where('id_producto', $producto->id_producto)->sum('cantidad_disponible');
+        $sinDatos = collect($tallas)->every(fn ($t) => ! array_key_exists($t, $stock));
+        if ($sinDatos) {
+            $stock = $tallas === [Tallas::UNICA] ? [Tallas::UNICA => $anterior] : Tallas::repartir($anterior);
+        }
+
+        ProductoTalla::where('id_producto', $producto->id_producto)->whereNotIn('talla', $tallas)->delete();
+        foreach ($tallas as $orden => $talla) {
+            ProductoTalla::updateOrCreate(
+                ['id_producto' => $producto->id_producto, 'talla' => $talla],
+                ['cantidad_disponible' => (int) ($stock[$talla] ?? 0), 'orden' => $orden]
+            );
+        }
+        $producto->sincronizarStock();
+    }
+
+    /**
+     * Agrega las fotos adicionales subidas, elimina las marcadas y guarda los cuadros de la vista 360°.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Producto  $producto
+     * @return void
+     */
+    private function guardarGaleria(Request $request, Producto $producto): void
+    {
+        foreach ($producto->imagenes()->whereIn('id_producto_imagen', $request->input('quitar_imagenes', []))->get() as $img) {
+            if (str_starts_with($img->ruta, 'uploads/')) {
+                File::delete(public_path($img->ruta));
+            }
+            $img->delete();
+        }
+
+        $orden = (int) $producto->imagenes()->max('orden');
+        foreach ($request->file('imagenes', []) as $archivo) {
+            $img = ImagenOptimizada::guardar($archivo, 'uploads/productos', $producto->nombre_producto.'-galeria');
+            $producto->imagenes()->create([
+                'ruta' => $img['ruta'], 'tipo' => 'galeria', 'orden' => ++$orden,
+                'ancho' => $img['ancho'], 'alto' => $img['alto'], 'peso_bytes' => $img['peso_bytes'],
+                'camara' => $img['camara'], 'fecha_toma' => $img['fecha_toma'],
+            ]);
+        }
+
+        // Vista 360°: una nueva tanda de cuadros reemplaza la anterior (orden = nombre del archivo)
+        $cuadros = $request->file('vistas360', []);
+        if ($request->boolean('quitar_360') || $cuadros) {
+            foreach ($producto->vistas360()->get() as $img) {
+                if (str_starts_with($img->ruta, 'uploads/')) {
+                    File::delete(public_path($img->ruta));
+                }
+                $img->delete();
+            }
+        }
+        if ($cuadros) {
+            usort($cuadros, fn ($a, $b) => strnatcasecmp($a->getClientOriginalName(), $b->getClientOriginalName()));
+            $carpeta360 = 'uploads/productos/360/'.Str::slug($producto->sku);
+            foreach ($cuadros as $n => $archivo) {
+                $nombre = str_pad((string) ($n + 1), 2, '0', STR_PAD_LEFT).'-'.Str::random(4);
+                $img = ImagenOptimizada::guardarComo($archivo, $carpeta360, $nombre);
+                $producto->vistas360()->create([
+                    'ruta' => $img['ruta'], 'tipo' => '360', 'orden' => $n + 1,
+                    'ancho' => $img['ancho'], 'alto' => $img['alto'], 'peso_bytes' => $img['peso_bytes'],
+                ]);
+            }
+        }
     }
 
     /**

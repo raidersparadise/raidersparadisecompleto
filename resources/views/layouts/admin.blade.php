@@ -54,6 +54,12 @@
             <button class="btn btn-fantasma btn-sm btn-menu" type="button" data-toggle="#sidebar" aria-label="Abrir menú"><x-icono n="menu" /></button>
             <span class="titulo">@yield('titulo', 'Panel')</span>
             <div class="usuario">
+                @php($avisosStock = $u->unreadNotifications()->count())
+                <a class="btn btn-fantasma btn-sm campana" href="{{ route('admin.inventario.index', ['nivel' => 'bajo']) }}" title="Alertas de stock bajo">
+                    <span aria-hidden="true">🔔</span>
+                    @if ($avisosStock)<span class="badge badge-stock-bajo">{{ $avisosStock }}</span>@endif
+                    <span class="sr-only">{{ $avisosStock }} alertas de stock sin leer</span>
+                </a>
                 <span class="avatar">{{ $u->iniciales }}</span>
                 <span>{{ $u->nombre_completo }}<small>{{ $u->rol->nombre_rol }}</small></span>
                 <form method="POST" action="{{ route('logout') }}">@csrf

@@ -1,0 +1,27 @@
+VISTA 360° DE LOS PRODUCTOS
+===========================
+
+Crea una carpeta por producto con su SKU y deja dentro los cuadros del giro, numerados
+en orden (01.jpg, 02.jpg, ... 24.jpg). Ejemplo:
+
+  360/CAS-SHO-001/01.jpg
+  360/CAS-SHO-001/02.jpg
+  ...
+  360/CAS-SHO-001/24.jpg
+
+Luego ejecuta:
+
+  php artisan productos:importar-fotos
+
+Cómo tomar las fotos (con el celular sirve):
+  1. Pon el producto sobre una base giratoria (o un plato) con fondo blanco y buena luz.
+  2. Deja el celular fijo (trípode) a la misma distancia y altura todo el tiempo.
+  3. Gira el producto un poco y toma una foto; repite hasta completar la vuelta.
+     24 fotos = una cada 15°; 36 fotos = una cada 10° (más suave).
+  4. Recorta todas igual (cuadradas, 800 x 800 px) y guárdalas en .jpg o .webp.
+
+En la tienda, el cliente arrastra la imagen para girar el producto. Si un producto no tiene
+360°, se muestra igual con el efecto 3D y la ampliación sutil.
+
+También puedes subir los cuadros desde el panel: Productos > Editar > Vista 360°.
+Las fotos extra de galería van en galeria/<SKU>/ y se importan con el mismo comando.

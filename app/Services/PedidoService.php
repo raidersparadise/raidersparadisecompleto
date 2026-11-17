@@ -19,6 +19,9 @@ use App\Models\Cliente;
 use App\Models\Factura;
 use App\Models\Inventario;
 use App\Models\Pedido;
+use App\Models\ProductoTalla;
+use App\Support\AlertaStock;
+use App\Support\Tallas;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -65,20 +68,25 @@ class PedidoService
             foreach ($carrito->detalles as $detalle) {
                 $producto = $detalle->producto;
                 $inventario = Inventario::where('id_producto', $producto->id_producto)->lockForUpdate()->first();
-                $disponible = $inventario?->cantidad_disponible ?? 0;
+                // Stock de la talla elegida (si el producto maneja tallas)
+                $fila = $detalle->talla !== null
+                    ? ProductoTalla::where('id_producto', $producto->id_producto)->where('talla', $detalle->talla)->lockForUpdate()->first()
+                    : null;
+                $disponible = $fila ? $fila->cantidad_disponible : ($inventario?->cantidad_disponible ?? 0);
+                $etiqueta = $fila && $fila->talla !== Tallas::UNICA ? " en talla {$fila->talla}" : '';
 
                 if ($producto->estado_producto !== 'activo') {
                     throw ValidationException::withMessages(['carrito' => "El producto {$producto->nombre_producto} ya no está disponible."]);
                 }
                 if ($detalle->cantidad > $disponible) {
-                    throw ValidationException::withMessages(['carrito' => "Solo quedan {$disponible} unidades de {$producto->nombre_producto}."]);
+                    throw ValidationException::withMessages(['carrito' => "Solo quedan {$disponible} unidades de {$producto->nombre_producto}{$etiqueta}."]);
                 }
 
                 // Se usa el precio vigente del producto, no el guardado en el carrito
                 $precio = (float) $producto->precio_producto;
                 $subtotal = $precio * $detalle->cantidad;
                 $total += $subtotal;
-                $lineas[] = [$producto, $inventario, $detalle->cantidad, $precio, $subtotal];
+                $lineas[] = [$producto, $inventario, $fila, $detalle->talla, $detalle->cantidad, $precio, $subtotal];
             }
 
             $pedido = Pedido::create([
@@ -91,15 +99,25 @@ class PedidoService
                 'notas' => $datos['notas'] ?? null,
             ]);
 
-            foreach ($lineas as [$producto, $inventario, $cantidad, $precio, $subtotal]) {
+            $alertas = collect();
+            foreach ($lineas as [$producto, $inventario, $fila, $talla, $cantidad, $precio, $subtotal]) {
                 $pedido->detalles()->create([
                     'id_producto' => $producto->id_producto,
+                    'talla' => $talla,
                     'cantidad' => $cantidad,
                     'precio_unitario' => $precio,
                     'sub_total' => $subtotal,
                 ]);
+                $nivelAntes = $inventario->nivel;
                 $inventario->decrement('cantidad_disponible', $cantidad);
+                $fila?->decrement('cantidad_disponible', $cantidad);
+                if (AlertaStock::cruzoMinimo($nivelAntes, $inventario)) {
+                    $alertas->push($inventario);
+                }
             }
+
+            // La alerta de stock bajo se envía solo si la compra se confirma
+            DB::afterCommit(fn () => AlertaStock::enviar($alertas));
 
             $this->generarFactura($pedido, $datos['metodo_pago']);
 
@@ -171,6 +189,10 @@ class PedidoService
             if ($estado === 'cancelado') {
                 foreach ($pedido->detalles as $detalle) {
                     Inventario::where('id_producto', $detalle->id_producto)->increment('cantidad_disponible', $detalle->cantidad);
+                    if ($detalle->talla !== null) {
+                        ProductoTalla::where('id_producto', $detalle->id_producto)->where('talla', $detalle->talla)
+                            ->increment('cantidad_disponible', $detalle->cantidad);
+                    }
                 }
                 $pedido->factura?->update(['estado_factura' => 'anulada']);
             }
